@@ -1,0 +1,80 @@
+package com.techelevator.model;
+
+public class Patient {
+    private int id;
+    private int userId;
+    private String firstName;
+    private String lastName;
+    private String insuranceNumber;
+    private String phone;
+    private String email;
+
+    public Patient() {
+    }
+
+    public Patient(int id, int userId, String firstName, String lastName, String insuranceNumber, String phone, String email) {
+        this.id = id;
+        this.userId = userId;
+        this.firstName=firstName;
+        this.lastName=lastName;
+        this.insuranceNumber = insuranceNumber;
+        this.phone = phone;
+        this.email = email;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public int getUserId() {
+        return userId;
+    }
+
+    public void setUserId(int userId) {
+        this.userId = userId;
+    }
+
+    public String getInsuranceNumber() {
+        return insuranceNumber;
+    }
+
+    public void setInsuranceNumber(String insuranceNumber) {
+        this.insuranceNumber = insuranceNumber;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+}
