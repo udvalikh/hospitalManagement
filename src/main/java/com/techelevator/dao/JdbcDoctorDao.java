@@ -1,16 +1,31 @@
 package com.techelevator.dao;
 
-import com.techelevator.exception.DaoException;
 import com.techelevator.model.Doctor;
 import com.techelevator.model.DoctorDto;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.support.rowset.SqlRowSet;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Component;
 
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
 
-public class JdbcDoctorDao implements DoctorDao{
+import static com.techelevator.dao.DaoSupport.blankToNull;
+import static com.techelevator.dao.DaoSupport.execute;
+
+@Component
+public class JdbcDoctorDao implements DoctorDao {
+
+    private static final String SELECT_DOCTOR =
+            "SELECT d.doctor_id, d.first_name, d.last_name, d.specialty, d.phone, d.available_days, " +
+            "d.available_time, u.user_id, u.username, u.role " +
+            "FROM doctors d JOIN users u ON u.user_id = d.user_id ";
+
+    private static final RowMapper<Doctor> DOCTOR_MAPPER = JdbcDoctorDao::mapRow;
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -19,144 +34,101 @@ public class JdbcDoctorDao implements DoctorDao{
     }
 
     @Override
-    public Doctor getDoctorById(int id) {
-        Doctor output = new Doctor();
-        String sql = "Select * from doctors where id = ?";
-
-        try {
-            SqlRowSet result = jdbcTemplate.queryForRowSet(sql, id);
-            if(result.next()) {
-                output = mapRowToDoctor(result);
-            }
-        } catch (DaoException e){
-            throw new DaoException("CAN'T GET doctor id : "+ id, e);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-        return output;
+    public Doctor getDoctorById(int doctorId) {
+        return execute(() -> jdbcTemplate.query(SELECT_DOCTOR + "WHERE d.doctor_id = ?", DOCTOR_MAPPER, doctorId)
+                .stream().findFirst().orElse(null));
     }
 
     @Override
-    public List<Doctor> getAllDoctors() {
-        List<Doctor> output= new ArrayList<>();
-        String sql= "select * from doctors";
-
-        try{
-            SqlRowSet results = jdbcTemplate.queryForRowSet(sql);
-            while (results.next()) {
-                Doctor temp = mapRowToDoctor(results);
-                output.add(temp);
-            }
-        } catch (DaoException e){
-            throw new DaoException("can't get doctors", e);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-        return output;
+    public Doctor getDoctorByUserId(int userId) {
+        return execute(() -> jdbcTemplate.query(SELECT_DOCTOR + "WHERE d.user_id = ?", DOCTOR_MAPPER, userId)
+                .stream().findFirst().orElse(null));
     }
 
     @Override
-    public List<Doctor> getDoctorsBySpecialty(String specialty) {
-        List<Doctor> output = new ArrayList<>();
-        String sql = "select * from doctors where specialty like ?;";
-        try{
-            SqlRowSet results = jdbcTemplate.queryForRowSet(sql, specialty);
-            while (results.next()){
-                Doctor temp = mapRowToDoctor(results);
-                output.add(temp);
-            }
-        } catch (DaoException e) {
-            throw new DaoException("can't get doctors", e);
+    public List<Doctor> getDoctors(String specialty) {
+        String order = "ORDER BY d.last_name, d.first_name, d.doctor_id";
+        if (specialty == null || specialty.isBlank()) {
+            return execute(() -> jdbcTemplate.query(SELECT_DOCTOR + order, DOCTOR_MAPPER));
         }
-        catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-        return output;
+        String pattern = "%" + escapeLike(specialty.trim()) + "%";
+        return execute(() -> jdbcTemplate.query(SELECT_DOCTOR + "WHERE d.specialty ILIKE ? " + order,
+                DOCTOR_MAPPER, pattern));
     }
 
     @Override
-    public Doctor createDoctor(DoctorDto dataIn) {
-
-        String sql="insert into doctors (id, user_id, first_name, last_name, specialty, phone, available_days, available_time) +" +
-                "values (?, ?, ?, ?, ?, ?, ?) RETURNING id";
-        Doctor doctor = mapFromDto(dataIn);
-        try{
-            int generatedId = jdbcTemplate.queryForObject(sql, Integer.class, doctor.getId(), doctor.getFirstName(), doctor.getLastName(), doctor.getSpecialty(), doctor.getPhone(), String.join(",", doctor.getAvailableDays()), doctor.getAvailableTime());
-            doctor.setId(generatedId);
-
-            return doctor;
-        }catch (DaoException e) {
-            throw new DaoException("can't get doctors", e);
-        }
-
+    public List<String> getSpecialties() {
+        return execute(() -> jdbcTemplate.queryForList(
+                "SELECT DISTINCT specialty FROM doctors WHERE specialty IS NOT NULL AND specialty <> '' " +
+                "ORDER BY specialty", String.class));
     }
 
     @Override
-    public Doctor updateDoctor(DoctorDto dataIn) {
-        String sql = "UPDATE doctors SET user_id = ?, first_name = ?, last_name = ?, specialty = ?, phone = ?, " +
-                "available_days = ?, available_time = ? " +  // Added missing space before WHERE
-                "WHERE id = ?;";
-        Doctor doctor = mapFromDto(dataIn);
-
-        try {
-            int rowsAffected = jdbcTemplate.update(
-                    sql,
-                    doctor.getUserId(),
-                    doctor.getFirstName(),
-                    doctor.getLastName(),
-                    doctor.getSpecialty(),
-                    doctor.getPhone(),
-                    String.join(",", doctor.getAvailableDays()),
-                    doctor.getAvailableTime(),
-                    doctor.getId()
-            );
-
-            if (rowsAffected == 1) {
-                // Optional: re-fetch from DB if needed for freshest data
-                return doctor;  // or fetchDoctorById(doctor.getId());
-            } else {
-                throw new DaoException("No doctor found with ID: " + doctor.getId());
-            }
-
-        } catch (DaoException e) {
-            throw new DaoException("Failed to update doctor", e);
-        } catch (Exception e) {
-            throw new RuntimeException("Database error while updating doctor", e);
-        }
-
+    public Doctor createDoctor(int userId, DoctorDto doctor) {
+        String sql = "INSERT INTO doctors (user_id, first_name, last_name, specialty, phone, available_days, available_time) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING doctor_id";
+        Integer newId = execute(() -> jdbcTemplate.queryForObject(sql, Integer.class,
+                userId,
+                doctor.getFirstName().trim(),
+                doctor.getLastName().trim(),
+                blankToNull(doctor.getSpecialty()),
+                blankToNull(doctor.getPhone()),
+                joinDays(doctor.getAvailableDays()),
+                blankToNull(doctor.getAvailableTime())));
+        return getDoctorById(newId);
     }
 
     @Override
-    public boolean deleteDoctor(int id) {
-        return false;
+    public Doctor updateDoctor(int doctorId, DoctorDto doctor) {
+        String sql = "UPDATE doctors SET first_name = ?, last_name = ?, specialty = ?, phone = ?, " +
+                "available_days = ?, available_time = ? WHERE doctor_id = ?";
+        int updated = execute(() -> jdbcTemplate.update(sql,
+                doctor.getFirstName().trim(),
+                doctor.getLastName().trim(),
+                blankToNull(doctor.getSpecialty()),
+                blankToNull(doctor.getPhone()),
+                joinDays(doctor.getAvailableDays()),
+                blankToNull(doctor.getAvailableTime()),
+                doctorId));
+        return updated == 1 ? getDoctorById(doctorId) : null;
     }
 
-    private Doctor mapRowToDoctor(SqlRowSet input) throws SQLException {
+    @Override
+    public boolean deleteDoctor(int doctorId) {
+        // Deleting the user cascades to the doctor row and their appointments.
+        String sql = "DELETE FROM users WHERE user_id = (SELECT user_id FROM doctors WHERE doctor_id = ?)";
+        return execute(() -> jdbcTemplate.update(sql, doctorId)) == 1;
+    }
+
+    static String joinDays(List<String> days) {
+        if (days == null || days.isEmpty()) {
+            return null;
+        }
+        String joined = days.stream()
+                .filter(day -> day != null && !day.isBlank())
+                .map(day -> day.trim().toUpperCase(Locale.ROOT))
+                .distinct()
+                .collect(Collectors.joining(","));
+        return joined.isEmpty() ? null : joined;
+    }
+
+    private static String escapeLike(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    private static Doctor mapRow(ResultSet rs, int rowNum) throws SQLException {
         Doctor doctor = new Doctor();
-
-        doctor.setId(input.getInt("id"));
-        doctor.setUserId(input.getInt("user_id"));
-        doctor.setFirstName(input.getString("first_name"));
-        doctor.setLastName(input.getString("last_name"));
-        doctor.setSpecialty(input.getString("specialty"));
-        doctor.setPhone(input.getString("phone"));
-        doctor.setAvailableDays(input.getString("available_days"));
-        doctor.setAvailableTime(input.getString("available_time"));
-
-        return doctor;
-    }
-
-    private Doctor mapFromDto(DoctorDto dto){
-        Doctor doctor = new Doctor();
-        doctor.setId(dto.getId());
-        doctor.setUserId(dto.getUserId());
-        doctor.setFirstName(dto.getFirstName());
-        doctor.setLastName(dto.getLastName());
-        doctor.setSpecialty(dto.getSpecialty());
-        doctor.setPhone(dto.getPhone());
-        doctor.setAvailableDays(dto.getAvailableDays());
-        doctor.setAvailableTime(dto.getAvailableTime());
-
+        doctor.setDoctorId(rs.getInt("doctor_id"));
+        doctor.setUser(DaoSupport.mapEmbeddedUser(rs));
+        doctor.setFirstName(rs.getString("first_name"));
+        doctor.setLastName(rs.getString("last_name"));
+        doctor.setSpecialty(rs.getString("specialty"));
+        doctor.setPhone(rs.getString("phone"));
+        String availableDays = rs.getString("available_days");
+        doctor.setAvailableDays(availableDays == null || availableDays.isBlank()
+                ? new ArrayList<>()
+                : new ArrayList<>(Arrays.stream(availableDays.split(",")).map(String::trim).toList()));
+        doctor.setAvailableTime(rs.getString("available_time"));
         return doctor;
     }
 }

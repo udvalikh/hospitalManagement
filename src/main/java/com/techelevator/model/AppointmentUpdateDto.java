@@ -1,62 +1,34 @@
 package com.techelevator.model;
 
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import java.time.LocalDateTime;
 
+/** Body for rescheduling an appointment (change doctor, time or reason). */
 public class AppointmentUpdateDto {
-    private int id;
-    private int doctorId;
-    private int patientId;
+    @NotNull(message = "doctorId is required")
+    private Integer doctorId;
+    @NotNull(message = "appointmentDate is required")
     private LocalDateTime appointmentDate;
+    @Size(max = 1000, message = "reason must be at most 1000 characters")
     private String reason;
 
     public AppointmentUpdateDto() {
     }
 
-    public AppointmentUpdateDto(int id, int doctorId, int patientId, LocalDateTime appointmentDate, String reason) {
-        this.id = id;
+    public AppointmentUpdateDto(Integer doctorId, LocalDateTime appointmentDate, String reason) {
         this.doctorId = doctorId;
-        this.patientId = patientId;
         this.appointmentDate = appointmentDate;
         this.reason = reason;
     }
 
-    public int getId() {
-        return id;
-    }
+    public Integer getDoctorId() { return doctorId; }
+    public void setDoctorId(Integer doctorId) { this.doctorId = doctorId; }
 
-    public void setId(int id) {
-        this.id = id;
-    }
+    public LocalDateTime getAppointmentDate() { return appointmentDate; }
+    public void setAppointmentDate(LocalDateTime appointmentDate) { this.appointmentDate = appointmentDate; }
 
-    public int getDoctorId() {
-        return doctorId;
-    }
-
-    public void setDoctorId(int doctorId) {
-        this.doctorId = doctorId;
-    }
-
-    public int getPatientId() {
-        return patientId;
-    }
-
-    public void setPatientId(int patientId) {
-        this.patientId = patientId;
-    }
-
-    public LocalDateTime getAppointmentDate() {
-        return appointmentDate;
-    }
-
-    public void setAppointmentDate(LocalDateTime appointmentDate) {
-        this.appointmentDate = appointmentDate;
-    }
-
-    public String getReason() {
-        return reason;
-    }
-
-    public void setReason(String reason) {
-        this.reason = reason;
-    }
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
 }

@@ -1,13 +1,13 @@
 -- **************************************************************
--- This script destroys the database and associated users
+-- This script destroys the database so it can be recreated.
 -- **************************************************************
 
--- The following line terminates any active connections to the database so that it can be destroyed
+-- Terminate any other active connections to the database so that it can be dropped
 SELECT pg_terminate_backend(pid)
 FROM pg_stat_activity
-WHERE datname = 'final_capstone';
+WHERE datname = 'hospital_db' AND pid <> pg_backend_pid();
 
-DROP DATABASE final_capstone;
+-- ⚠️ This deletes all data in hospital_db
+DROP DATABASE IF EXISTS hospital_db;
 
-DROP USER final_capstone_owner;
-DROP USER final_capstone_appuser;
+-- NOTE: never drop the 'postgres' superuser here - the application and this script connect with it.

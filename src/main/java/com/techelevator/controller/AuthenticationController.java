@@ -1,74 +1,81 @@
 package com.techelevator.controller;
 
+import com.techelevator.model.LoginDto;
+import com.techelevator.model.LoginResponseDto;
+import com.techelevator.model.Patient;
+import com.techelevator.model.RegisterUserDto;
+import com.techelevator.security.CurrentUser;
+import com.techelevator.security.CurrentUserService;
+import com.techelevator.security.jwt.JWTFilter;
+import com.techelevator.security.jwt.TokenProvider;
+import com.techelevator.service.AccountService;
 import jakarta.validation.Valid;
-
-import com.techelevator.exception.DaoException;
-import com.techelevator.model.*;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
 
-import com.techelevator.dao.UserDao;
-import com.techelevator.security.jwt.JWTFilter;
-import com.techelevator.security.jwt.TokenProvider;
+import java.security.Principal;
+import java.util.List;
 
 @RestController
-@CrossOrigin
 public class AuthenticationController {
 
     private final TokenProvider tokenProvider;
     private final AuthenticationManagerBuilder authenticationManagerBuilder;
-    private final UserDao userDao;
+    private final CurrentUserService currentUserService;
+    private final AccountService accountService;
 
-    public AuthenticationController(TokenProvider tokenProvider, AuthenticationManagerBuilder authenticationManagerBuilder, UserDao userDao) {
+    public AuthenticationController(TokenProvider tokenProvider, AuthenticationManagerBuilder authenticationManagerBuilder,
+                                    CurrentUserService currentUserService, AccountService accountService) {
         this.tokenProvider = tokenProvider;
         this.authenticationManagerBuilder = authenticationManagerBuilder;
-        this.userDao = userDao;
+        this.currentUserService = currentUserService;
+        this.accountService = accountService;
     }
 
-    @RequestMapping(path = "/login", method = RequestMethod.POST)
+    /** Returns a JWT plus the user and their linked doctorId/patientId. */
+    @PostMapping("/login")
     public ResponseEntity<LoginResponseDto> login(@Valid @RequestBody LoginDto loginDto) {
-
-        UsernamePasswordAuthenticationToken authenticationToken =
+        UsernamePasswordAuthenticationToken credentials =
                 new UsernamePasswordAuthenticationToken(loginDto.getUsername(), loginDto.getPassword());
-
-        Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        // Throws BadCredentialsException (-> 401) on a wrong username or password.
+        Authentication authentication = authenticationManagerBuilder.getObject().authenticate(credentials);
         String jwt = tokenProvider.createToken(authentication, false);
 
-        User user;
-        try {
-            user = userDao.getUserByUsername(loginDto.getUsername());
-        } catch (DaoException e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Username or password is incorrect.");
-        }
-
-        HttpHeaders httpHeaders = new HttpHeaders();
-        httpHeaders.add(JWTFilter.AUTHORIZATION_HEADER, "Bearer " + jwt);
-        return new ResponseEntity<>(new LoginResponseDto(jwt, user), httpHeaders, HttpStatus.OK);
+        CurrentUser current = currentUserService.forUsername(authentication.getName());
+        return withToken(HttpStatus.OK, jwt, current);
     }
 
-    @ResponseStatus(HttpStatus.CREATED)
-    @RequestMapping(path = "/register", method = RequestMethod.POST)
-    public void register(@Valid @RequestBody RegisterUserDto newUser) {
-        try {
-            if (userDao.getUserByUsername(newUser.getUsername()) != null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already exists.");
-            } else {
-                userDao.createUser(newUser);
-            }
-        }
-        catch (DaoException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "User registration failed.");
-        }
+    /** Patient self-registration. Responds 201 with a token so the frontend can sign the user in at once. */
+    @PostMapping("/register")
+    public ResponseEntity<LoginResponseDto> register(@Valid @RequestBody RegisterUserDto newUser) {
+        Patient patient = accountService.registerPatient(newUser);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(patient.getUser().getUsername(), null,
+                List.of(new SimpleGrantedAuthority(AccountService.ROLE_PATIENT)));
+        String jwt = tokenProvider.createToken(authentication, false);
+        return withToken(HttpStatus.CREATED, jwt,
+                new CurrentUser(patient.getUser(), null, patient.getPatientId()));
     }
 
+    /** The signed-in user, for restoring a session from a stored token. */
+    @GetMapping("/me")
+    public LoginResponseDto me(Principal principal) {
+        CurrentUser current = currentUserService.get(principal);
+        return new LoginResponseDto(null, current.user(), current.doctorId(), current.patientId());
+    }
+
+    private static ResponseEntity<LoginResponseDto> withToken(HttpStatus status, String jwt, CurrentUser current) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(JWTFilter.AUTHORIZATION_HEADER, "Bearer " + jwt);
+        LoginResponseDto body = new LoginResponseDto(jwt, current.user(), current.doctorId(), current.patientId());
+        return new ResponseEntity<>(body, headers, status);
+    }
 }
-

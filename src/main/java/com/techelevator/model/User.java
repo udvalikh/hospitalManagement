@@ -1,6 +1,7 @@
 package com.techelevator.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.HashSet;
 import java.util.Objects;
@@ -8,7 +9,7 @@ import java.util.Set;
 
 public class User {
 
-   private int id;
+   private int userId;
    private String username;
    @JsonIgnore
    private String password;
@@ -19,19 +20,19 @@ public class User {
    public User() { }
 
    public User(int id, String username, String password, String authorities) {
-      this.id = id;
+      this.userId = id;
       this.username = username;
       this.password = password;
-      if (authorities != null) this.setAuthorities(authorities);
+       if (authorities != null) this.setAuthorities(authorities);
       this.activated = true;
    }
 
-   public int getId() {
-      return id;
+   public int getUserId() {
+      return userId;
    }
 
-   public void setId(int id) {
-      this.id = id;
+   public void setUserId(int userId) {
+      this.userId = userId;
    }
 
    public String getUsername() {
@@ -66,6 +67,12 @@ public class User {
       this.authorities = authorities;
    }
 
+   /** Convenience for the frontend: the user's primary role, e.g. "ROLE_PATIENT". */
+   @JsonProperty("role")
+   public String getRole() {
+      return authorities.stream().map(Authority::getName).sorted().findFirst().orElse(null);
+   }
+
    public void setAuthorities(String authorities) {
       String[] roles = authorities.split(",");
       for (String role : roles) {
@@ -79,22 +86,18 @@ public class User {
       if (this == o) return true;
       if (o == null || getClass() != o.getClass()) return false;
       User user = (User) o;
-      return id == user.id &&
-              activated == user.activated &&
-              Objects.equals(username, user.username) &&
-              Objects.equals(password, user.password) &&
-              Objects.equals(authorities, user.authorities);
+      return userId == user.userId && activated == user.activated && Objects.equals(username, user.username) && Objects.equals(password, user.password) && Objects.equals(authorities, user.authorities);
    }
 
    @Override
    public int hashCode() {
-      return Objects.hash(id, username, password, activated, authorities);
+      return Objects.hash(userId, username, password, activated, authorities);
    }
 
    @Override
    public String toString() {
       return "User{" +
-              "id=" + id +
+              "userId=" + userId +
               ", username='" + username + '\'' +
               ", activated=" + activated +
               ", authorities=" + authorities +

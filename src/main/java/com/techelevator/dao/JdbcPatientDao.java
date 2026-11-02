@@ -1,16 +1,27 @@
 package com.techelevator.dao;
 
-import com.techelevator.exception.DaoException;
 import com.techelevator.model.Patient;
 import com.techelevator.model.PatientDto;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.support.rowset.SqlRowSet;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
-import java.util.Optional;
 
+import static com.techelevator.dao.DaoSupport.blankToNull;
+import static com.techelevator.dao.DaoSupport.execute;
+
+@Component
 public class JdbcPatientDao implements PatientDao {
+
+    private static final String SELECT_PATIENT =
+            "SELECT p.patient_id, p.first_name, p.last_name, p.insurance_number, p.phone, p.email, " +
+            "u.user_id, u.username, u.role " +
+            "FROM patients p JOIN users u ON u.user_id = p.user_id ";
+
+    private static final RowMapper<Patient> PATIENT_MAPPER = JdbcPatientDao::mapRow;
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -19,115 +30,73 @@ public class JdbcPatientDao implements PatientDao {
     }
 
     @Override
-    public Patient createPatient(PatientDto dataIn) {
-        String sql = "INSERT INTO patients (id, user_id, first_name, last_name, insurance_number, email, phone) VALUES (?, ?, ?, ?, ?, ?) RETURNING id";
-
-        try {
-            int newId = jdbcTemplate.queryForObject(sql, Integer.class, dataIn.getId(), dataIn.getFirstName(), dataIn.getLastName(), dataIn.getInsuranceNumber(), dataIn.getEmail(), dataIn.getPhone());
-            return new Patient(newId, dataIn.getUserId(), dataIn.getFirstName(), dataIn.getLastName(), dataIn.getInsuranceNumber(), dataIn.getPhone(), dataIn.getEmail());
-        } catch (DaoException e) {
-            throw new DaoException("Failed to update appointment", e);
-        } catch (Exception e) {
-            throw new RuntimeException("Database error while updating appointment", e);
-        }
-
+    public Patient getPatientById(int patientId) {
+        return execute(() -> jdbcTemplate.query(SELECT_PATIENT + "WHERE p.patient_id = ?", PATIENT_MAPPER, patientId)
+                .stream().findFirst().orElse(null));
     }
 
     @Override
-    public Optional<Patient> findById(Long id) {
-        String sql = "SELECT * FROM patients WHERE id = ?";
-        try {
-            Patient patient = jdbcTemplate.queryForObject(sql, (rs, rowNum) -> new Patient(
-                    rs.getInt("id"),
-                    rs.getInt("user_id"),
-                    rs.getString("first_name"),
-                    rs.getString("last_name"),
-                    rs.getString("insurance_number"),
-                    rs.getString("phone"),
-                    rs.getString("email")
-            ), id);
-            return Optional.ofNullable(patient);
-        } catch (DaoException e) {
-            throw new DaoException("Failed to update appointment", e);
-        } catch (Exception e) {
-            throw new RuntimeException("Database error while updating appointment", e);
-        }
-
+    public Patient getPatientByUserId(int userId) {
+        return execute(() -> jdbcTemplate.query(SELECT_PATIENT + "WHERE p.user_id = ?", PATIENT_MAPPER, userId)
+                .stream().findFirst().orElse(null));
     }
 
     @Override
-    public List<Patient> findAll() {
-        List<Patient> output = new ArrayList<>();
-        String sql = "SELECT * FROM patients";
-        try {
-            SqlRowSet results = jdbcTemplate.queryForRowSet(sql);
-            while (results.next()) {
-                output.add(mapRowToPatient(results));
-            }
-            return output;
-        } catch (DaoException e) {
-            throw new DaoException("Failed to update appointment", e);
-        } catch (Exception e) {
-            throw new RuntimeException("Database error while updating appointment", e);
-        }
+    public List<Patient> getPatients() {
+        return execute(() -> jdbcTemplate.query(
+                SELECT_PATIENT + "ORDER BY p.last_name NULLS LAST, p.first_name NULLS LAST, p.patient_id",
+                PATIENT_MAPPER));
     }
 
     @Override
-    public Patient updatePatient(PatientDto dataIn) {
-        String sql = "UPDATE patients SET first_name = ?, last_name = ?, insurance_number = ?, email = ?, phone = ? WHERE id = ?";
-
-        try {
-            jdbcTemplate.update(sql, dataIn.getFirstName(), dataIn.getLastName(), dataIn.getInsuranceNumber(), dataIn.getEmail(), dataIn.getPhone(), dataIn.getId());
-            return new Patient(dataIn.getId(), dataIn.getUserId(), dataIn.getFirstName(), dataIn.getLastName(), dataIn.getInsuranceNumber(), dataIn.getPhone(), dataIn.getEmail());
-        } catch (DaoException e) {
-            throw new DaoException("Failed to update appointment", e);
-        } catch (Exception e) {
-            throw new RuntimeException("Database error while updating appointment", e);
-        }
+    public Patient createPatient(int userId, PatientDto patient) {
+        String sql = "INSERT INTO patients (user_id, first_name, last_name, insurance_number, phone, email) " +
+                "VALUES (?, ?, ?, ?, ?, ?) RETURNING patient_id";
+        Integer newId = execute(() -> jdbcTemplate.queryForObject(sql, Integer.class,
+                userId,
+                blankToNull(patient.getFirstName()),
+                blankToNull(patient.getLastName()),
+                blankToNull(patient.getInsuranceNumber()),
+                blankToNull(patient.getPhone()),
+                normalizeEmail(patient.getEmail())));
+        return getPatientById(newId);
     }
 
     @Override
-    public boolean deleteById(Long id) {
-        String sql = "DELETE FROM patients WHERE id = ?";
-        try {
-            int rowsAffected = jdbcTemplate.update(sql, id);
-            return rowsAffected == 1;
-        } catch (DaoException e) {
-            throw new DaoException("Failed to update appointment", e);
-        } catch (Exception e) {
-            throw new RuntimeException("Database error while updating appointment", e);
-        }
+    public Patient updatePatient(int patientId, PatientDto patient) {
+        String sql = "UPDATE patients SET first_name = ?, last_name = ?, insurance_number = ?, phone = ?, email = ? " +
+                "WHERE patient_id = ?";
+        int updated = execute(() -> jdbcTemplate.update(sql,
+                blankToNull(patient.getFirstName()),
+                blankToNull(patient.getLastName()),
+                blankToNull(patient.getInsuranceNumber()),
+                blankToNull(patient.getPhone()),
+                normalizeEmail(patient.getEmail()),
+                patientId));
+        return updated == 1 ? getPatientById(patientId) : null;
     }
 
     @Override
-    public Optional<Patient> findByEmail(String email) {
-        String sql = "SELECT * FROM patients WHERE email = ?";
-        try {
-            SqlRowSet result = jdbcTemplate.queryForRowSet(sql, email);
-            if (result.next()) {
-                return Optional.of(mapRowToPatient(result));
-            }
-        } catch (DaoException e) {
-            throw new DaoException("Failed to update appointment", e);
-        } catch (Exception e) {
-            throw new RuntimeException("Database error while updating appointment", e);
-        }
-        return Optional.empty();
+    public boolean deletePatient(int patientId) {
+        // Deleting the user cascades to the patient row and their appointments.
+        String sql = "DELETE FROM users WHERE user_id = (SELECT user_id FROM patients WHERE patient_id = ?)";
+        return execute(() -> jdbcTemplate.update(sql, patientId)) == 1;
     }
 
-    private Patient mapRowToPatient(SqlRowSet input) {
+    private static String normalizeEmail(String email) {
+        String value = blankToNull(email);
+        return value == null ? null : value.toLowerCase();
+    }
+
+    private static Patient mapRow(ResultSet rs, int rowNum) throws SQLException {
         Patient patient = new Patient();
-        patient.setId(input.getInt("id"));
-        patient.setUserId(input.getInt("user_id"));
-        patient.setFirstName(input.getString("first_name"));
-        patient.setLastName(input.getString("last_name"));
-        patient.setInsuranceNumber(input.getString("insurance_number"));
-        patient.setPhone(input.getString("phone"));
-        patient.setEmail(input.getString("email"));
+        patient.setPatientId(rs.getInt("patient_id"));
+        patient.setUser(DaoSupport.mapEmbeddedUser(rs));
+        patient.setFirstName(rs.getString("first_name"));
+        patient.setLastName(rs.getString("last_name"));
+        patient.setInsuranceNumber(rs.getString("insurance_number"));
+        patient.setPhone(rs.getString("phone"));
+        patient.setEmail(rs.getString("email"));
         return patient;
     }
-
 }
-
-
-
