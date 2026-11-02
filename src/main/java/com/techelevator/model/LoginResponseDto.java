@@ -1,37 +1,38 @@
 package com.techelevator.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-/*
-    The acronym DTO is being used for "data transfer object". It means that this type of class is specifically
-    created to transfer data between the client and the server. For example, CredentialsDto represents the data a client must
-    pass to the server for a login endpoint, and TokenDto represents the object that's returned from the server
-    to the client from a login endpoint.
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+/**
+ * Returned from /login (with a token) and /me (without one). {@code doctorId} / {@code patientId}
+ * identify the profile linked to the account so the frontend can call profile-specific endpoints.
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class LoginResponseDto {
 
     private String token;
     private User user;
+    private Integer doctorId;
+    private Integer patientId;
 
-    public LoginResponseDto(String token, User user) {
+    public LoginResponseDto() {
+    }
+
+    public LoginResponseDto(String token, User user, Integer doctorId, Integer patientId) {
         this.token = token;
         this.user = user;
+        this.doctorId = doctorId;
+        this.patientId = patientId;
     }
 
-    @JsonProperty("token")
-    String getToken() {
-        return token;
-    }
+    public String getToken() { return token; }
+    public void setToken(String token) { this.token = token; }
 
-    void setToken(String token) {
-        this.token = token;
-    }
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 
-    @JsonProperty("user")
-    public User getUser() {
-        return user;
-    }
+    public Integer getDoctorId() { return doctorId; }
+    public void setDoctorId(Integer doctorId) { this.doctorId = doctorId; }
 
-    public void setUser(User user) {
-        this.user = user;
-    }
+    public Integer getPatientId() { return patientId; }
+    public void setPatientId(Integer patientId) { this.patientId = patientId; }
 }

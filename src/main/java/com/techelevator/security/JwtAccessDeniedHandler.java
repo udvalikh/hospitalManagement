@@ -1,22 +1,32 @@
 package com.techelevator.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.techelevator.model.ApiError;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
+/** Sends a JSON 403 when an authenticated user lacks the required role. */
 @Component
 public class JwtAccessDeniedHandler implements AccessDeniedHandler {
 
+    private final ObjectMapper objectMapper;
+
+    public JwtAccessDeniedHandler(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
     @Override
-    public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) throws IOException {
-        // This is invoked when user tries to access a secured REST resource without the necessary authorization
-        // We should just send a 403 Forbidden response because there is no 'error' page to redirect to
-        // Here you can place any message you want
-        response.sendError(HttpServletResponse.SC_FORBIDDEN, accessDeniedException.getMessage());
+    public void handle(HttpServletRequest request, HttpServletResponse response,
+                       AccessDeniedException accessDeniedException) throws IOException {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        objectMapper.writeValue(response.getOutputStream(), ApiError.of(403, "Forbidden",
+                "You do not have permission to access this resource", request.getRequestURI()));
     }
 }
-

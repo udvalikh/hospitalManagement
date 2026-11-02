@@ -1,20 +1,26 @@
 package com.techelevator.model;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Size;
+
+/** Editable patient profile fields. */
 public class PatientDto {
-    private int id;
-    private int userId;
+    @Size(max = 100)
     private String firstName;
+    @Size(max = 100)
     private String lastName;
+    @Size(max = 50)
     private String insuranceNumber;
+    @Size(max = 20)
     private String phone;
+    @Email(message = "email must be a valid email address")
+    @Size(max = 100)
     private String email;
 
     public PatientDto() {
     }
 
-    public PatientDto(int id, int userId, String firstName, String lastName, String insuranceNumber, String phone, String email) {
-        this.id = id;
-        this.userId = userId;
+    public PatientDto(String firstName, String lastName, String insuranceNumber, String phone, String email) {
         this.firstName = firstName;
         this.lastName = lastName;
         this.insuranceNumber = insuranceNumber;
@@ -22,57 +28,18 @@ public class PatientDto {
         this.email = email;
     }
 
-    public int getId() {
-        return id;
-    }
-    public int getUserId() {
-        return userId;
-    }
-    public void setUserId(int userId) {
-        this.userId = userId;
-    }
+    public String getFirstName() { return firstName; }
+    public void setFirstName(String firstName) { this.firstName = firstName; }
 
-    public void setId(int id) {
-        this.id = id;
-    }
+    public String getLastName() { return lastName; }
+    public void setLastName(String lastName) { this.lastName = lastName; }
 
-    public String getFirstName() {
-        return firstName;
-    }
+    public String getInsuranceNumber() { return insuranceNumber; }
+    public void setInsuranceNumber(String insuranceNumber) { this.insuranceNumber = insuranceNumber; }
 
-    public void setFirstName(String firstName) {
-        this.firstName = firstName;
-    }
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
 
-    public String getLastName() {
-        return lastName;
-    }
-
-    public void setLastName(String lastName) {
-        this.lastName = lastName;
-    }
-
-    public String getInsuranceNumber() {
-        return insuranceNumber;
-    }
-
-    public void setInsuranceNumber(String insuranceNumber) {
-        this.insuranceNumber = insuranceNumber;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
 }

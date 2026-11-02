@@ -26,13 +26,7 @@ public class JdbcUserDaoTest extends BaseDaoTest {
 
     @Test
     public void getUserByUsername_given_null_throws_exception() {
-        try {
-            sut.getUserByUsername(null);
-        } catch (IllegalArgumentException e) {
-            // expected
-        } catch (Exception e) {
-            fail("Expected IllegalArgumentException");
-        }
+        assertThrows(IllegalArgumentException.class, () -> sut.getUserByUsername(null));
     }
 
     @Test
@@ -42,23 +36,22 @@ public class JdbcUserDaoTest extends BaseDaoTest {
 
     @Test
     public void getUserByUsername_given_valid_user_returns_user() {
-        User actualUser = sut.getUserByUsername(USER_1.getUsername());
+        assertEquals(USER_1, sut.getUserByUsername(USER_1.getUsername()));
+    }
 
-        assertEquals(USER_1, actualUser);
+    @Test
+    public void getUserByUsername_is_case_and_whitespace_insensitive() {
+        assertEquals(USER_1, sut.getUserByUsername("  USER1 "));
     }
 
     @Test
     public void getUserById_given_invalid_user_id_returns_null() {
-        User actualUser = sut.getUserById(-1);
-
-        assertNull(actualUser);
+        assertNull(sut.getUserById(-1));
     }
 
     @Test
     public void getUserById_given_valid_user_id_returns_user() {
-        User actualUser = sut.getUserById(USER_1.getId());
-
-        assertEquals(USER_1, actualUser);
+        assertEquals(USER_1, sut.getUserById(USER_1.getUserId()));
     }
 
     @Test
@@ -66,7 +59,7 @@ public class JdbcUserDaoTest extends BaseDaoTest {
         List<User> users = sut.getUsers();
 
         assertNotNull(users);
-        assertEquals(3, users.size());
+        assertEquals(8, users.size());
         assertEquals(USER_1, users.get(0));
         assertEquals(USER_2, users.get(1));
         assertEquals(USER_3, users.get(2));
@@ -74,60 +67,47 @@ public class JdbcUserDaoTest extends BaseDaoTest {
 
     @Test
     public void createUser_with_null_username() {
-        try {
-            RegisterUserDto registerUserDto = new RegisterUserDto();
-            registerUserDto.setUsername(null);
-            registerUserDto.setPassword(USER_3.getPassword());
-            registerUserDto.setRole("ROLE_USER");
-            sut.createUser(registerUserDto);
-        } catch (DaoException e) {
-            // expected
-        } catch (Exception e) {
-            fail("Expected DaoException");
-        }
+        RegisterUserDto registerUserDto = newRegistration(null, USER_3.getPassword());
+        assertThrows(DaoException.class, () -> sut.createUser(registerUserDto));
     }
 
     @Test
     public void createUser_with_existing_username() {
-        try {
-            RegisterUserDto registerUserDto = new RegisterUserDto();
-            registerUserDto.setUsername(USER_1.getUsername());
-            registerUserDto.setPassword(USER_3.getPassword());
-            registerUserDto.setRole("ROLE_USER");
-            sut.createUser(registerUserDto);
-        } catch (DaoException e) {
-            // expected
-        } catch (Exception e) {
-            fail("Expected DaoException");
-        }
+        RegisterUserDto registerUserDto = newRegistration(USER_1.getUsername(), USER_3.getPassword());
+        assertThrows(DaoException.class, () -> sut.createUser(registerUserDto));
     }
 
     @Test
     public void createUser_with_null_password() {
-        try {
-            RegisterUserDto registerUserDto = new RegisterUserDto();
-            registerUserDto.setUsername(USER_3.getUsername());
-            registerUserDto.setPassword(null);
-            registerUserDto.setRole("ROLE_USER");
-            sut.createUser(registerUserDto);
-        } catch (IllegalArgumentException e) {
-            // expected
-        } catch (Exception e) {
-            fail("Expected IllegalArgumentException");
-        }
+        RegisterUserDto registerUserDto = newRegistration("brandnew", null);
+        assertThrows(IllegalArgumentException.class, () -> sut.createUser(registerUserDto));
     }
 
     @Test
-    public void createUser_creates_a_user() {
-        RegisterUserDto user = new RegisterUserDto();
-        user.setUsername("new");
-        user.setPassword("user");
-        user.setRole("ROLE_USER");
-        User createdUser = sut.createUser(user);
+    public void createUser_creates_a_user_with_hashed_password() {
+        User createdUser = sut.createUser(newRegistration("new", "user"));
 
         assertNotNull(createdUser);
+        assertNotEquals("user", createdUser.getPassword(), "password must be stored hashed");
+        assertEquals(createdUser, sut.getUserByUsername(createdUser.getUsername()));
+    }
 
-        User retrievedUser = sut.getUserByUsername(createdUser.getUsername());
-        assertEquals(retrievedUser, createdUser);
+    @Test
+    public void createUser_normalizes_role_and_username() {
+        RegisterUserDto registration = newRegistration("  MixedCase ", "password");
+        registration.setRole("patient");
+
+        User createdUser = sut.createUser(registration);
+
+        assertEquals("mixedcase", createdUser.getUsername());
+        assertEquals("ROLE_PATIENT", createdUser.getRole());
+    }
+
+    private static RegisterUserDto newRegistration(String username, String password) {
+        RegisterUserDto dto = new RegisterUserDto();
+        dto.setUsername(username);
+        dto.setPassword(password);
+        dto.setRole("ROLE_USER");
+        return dto;
     }
 }

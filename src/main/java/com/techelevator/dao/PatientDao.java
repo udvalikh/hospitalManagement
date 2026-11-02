@@ -4,19 +4,22 @@ import com.techelevator.model.Patient;
 import com.techelevator.model.PatientDto;
 
 import java.util.List;
-import java.util.Optional;
 
 public interface PatientDao {
-    Patient createPatient(PatientDto dataIn);
 
-    Optional<Patient> findById(Long id);
-    List<Patient> findAll();
+    /** @return the patient, or {@code null} if none exists. */
+    Patient getPatientById(int patientId);
 
+    /** @return the patient profile linked to a user account, or {@code null}. */
+    Patient getPatientByUserId(int userId);
 
-    Patient updatePatient(PatientDto dataIn);
+    List<Patient> getPatients();
 
+    Patient createPatient(int userId, PatientDto patient);
 
-    boolean deleteById(Long id);
+    /** @return the updated patient, or {@code null} if none exists. */
+    Patient updatePatient(int patientId, PatientDto patient);
 
-    Optional<Patient> findByEmail(String email);
+    /** Deletes the patient together with their login account and appointments. */
+    boolean deletePatient(int patientId);
 }
